@@ -16,34 +16,34 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.bearbudget.ui.screens.TransactionsScreen
-import com.example.bearbudget.ui.screens.AddTransactionScreen
-import com.example.bearbudget.ui.screens.SummaryScreen   // <-- ADD THIS IMPORT
+import com.example.bearbudget.ui.screens.*
 
 @Composable
 fun MainNavigation() {
     val navController = rememberNavController()
-    Scaffold(
-        bottomBar = { BottomNavigationBar(navController) }
-    ) { innerPadding ->
+    Scaffold(bottomBar = { BottomNavigationBar(navController) }) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = "transactions",
+            startDestination = "transactions", // default to transactions screen
             modifier = Modifier.padding(innerPadding)
         ) {
             composable("transactions") { TransactionsScreen() }
-            composable("summary") { SummaryScreen() } // <-- CHANGED HERE
-            composable("accounts") { Text("Accounts Page") }
+            composable("summary") { SummaryScreen() }
+            composable("accounts") { AccountsScreen(navController) }
             composable("add_transaction") {
                 AddTransactionScreen(
                     onTransactionAdded = {
                         navController.navigate("transactions") {
-                            popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                            popUpTo("transactions") { inclusive = false }
                             launchSingleTop = true
                             restoreState = true
                         }
                     }
                 )
+            }
+            composable("account_details/{accountName}") { backStackEntry ->
+                val accountName = backStackEntry.arguments?.getString("accountName") ?: ""
+                AccountDetailsScreen(accountName)
             }
         }
     }
@@ -60,7 +60,6 @@ fun BottomNavigationBar(navController: androidx.navigation.NavHostController) {
     NavigationBar {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = navBackStackEntry?.destination
-
         items.forEach { item ->
             NavigationBarItem(
                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,

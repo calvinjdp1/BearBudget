@@ -2,6 +2,9 @@ package com.example.bearbudget.network
 
 import retrofit2.http.*
 
+data class BankBody(val name: String, val balance: Double)
+data class DebtBody(val name: String, val balance: Double)
+
 interface ApiService {
     @GET("cards")
     suspend fun getCards(): List<Card>
@@ -23,4 +26,18 @@ interface ApiService {
 
     @GET("summary")
     suspend fun getSummary(): List<SummaryItem>
+
+    @GET("accounts")
+    suspend fun getAccounts(): Map<String, Any>
+
+    @POST("banks")
+    suspend fun addBank(@Body bank: BankBody)
+
+    @POST("debts")
+    suspend fun addDebt(@Body debt: DebtBody)
+
+    @DELETE("cards/{name}")
+    suspend fun deleteCard(@Path("name") name: String)
+
+
 }

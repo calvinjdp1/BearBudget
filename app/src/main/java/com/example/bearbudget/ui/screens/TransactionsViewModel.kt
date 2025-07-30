@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bearbudget.network.ApiClient
 import com.example.bearbudget.network.Transaction
-import com.example.bearbudget.network.Card
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -13,6 +12,7 @@ class TransactionsViewModel : ViewModel() {
 
     private val api = ApiClient.apiService
 
+    // Dropdown options (only accounts)
     private val _cards = MutableStateFlow<List<String>>(emptyList())
     val cards: StateFlow<List<String>> = _cards
 
@@ -23,16 +23,26 @@ class TransactionsViewModel : ViewModel() {
     val transactions: StateFlow<List<Transaction>> = _transactions
 
     init {
-        fetchCards()
+        fetchCardsFromAccounts()
         fetchCategories()
         fetchTransactions()
     }
 
-    fun fetchCards() {
+    /**
+     * Fetch accounts and use them as card options
+     */
+    fun fetchCardsFromAccounts() {
         viewModelScope.launch {
             try {
-                val response: List<Card> = api.getCards()
-                _cards.value = response.map { card -> card.name }
+                val accountResponse = api.getAccounts()
+                val banks = accountResponse["banks"] as List<Map<String, Any>>
+                val debts = accountResponse["debts"] as List<Map<String, Any>>
+
+                val accounts = mutableListOf<String>()
+                banks.forEach { accounts.add(it["name"] as String) }
+                debts.forEach { accounts.add(it["name"] as String) }
+
+                _cards.value = accounts.distinct()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -82,12 +92,26 @@ class TransactionsViewModel : ViewModel() {
             }
         }
     }
+
     fun addTransaction(transaction: Transaction, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
                 api.addTransaction(transaction)
-                fetchCards()
+                fetchCardsFromAccounts()
                 fetchTransactions()
+                onSuccess()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // Optional: Delete legacy cards if server supports it
+    fun deleteCard(name: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                api.deleteCard(name)
+                fetchCardsFromAccounts()
                 onSuccess()
             } catch (e: Exception) {
                 e.printStackTrace()
