@@ -21,23 +21,57 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
     val cards by viewModel.cards.collectAsState()
 
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
+    var showAddSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Transactions", style = MaterialTheme.typography.titleLarge)
-        Spacer(modifier = Modifier.height(16.dp))
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddSheet = true }) {
+                Text("+")
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            Text("Transactions", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn {
-            items(transactions) { transaction ->
-                TransactionRow(transaction) {
-                    selectedTransaction = transaction
-                    scope.launch { sheetState.show() }
+            LazyColumn {
+                items(transactions) { transaction ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selectedTransaction = transaction
+                                scope.launch { sheetState.show() }
+                            }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(transaction.date, style = MaterialTheme.typography.bodyMedium)
+                            Text(transaction.category ?: "No Category", style = MaterialTheme.typography.bodyLarge)
+                            if (!transaction.card.isNullOrBlank()) {
+                                Text("Card: ${transaction.card}", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Text(
+                            text = String.format("$%.2f", transaction.amount),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                    HorizontalDivider()
                 }
             }
         }
     }
 
+    // Transaction details bottom sheet
     if (selectedTransaction != null) {
         ModalBottomSheet(
             sheetState = sheetState,
@@ -62,28 +96,16 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
             )
         }
     }
-}
 
-@Composable
-fun TransactionRow(transaction: Transaction, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(transaction.date, style = MaterialTheme.typography.bodyMedium)
-            Text(transaction.category ?: "No Category", style = MaterialTheme.typography.bodyLarge)
-            if (!transaction.card.isNullOrBlank()) {
-                Text("Card: ${transaction.card}", style = MaterialTheme.typography.bodySmall)
+    // Add transaction sheet
+    if (showAddSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAddSheet = false }
+        ) {
+            AddTransactionScreen(viewModel = viewModel) {
+                viewModel.fetchTransactions() // refresh after adding
+                showAddSheet = false
             }
         }
-        Text(
-            text = String.format("$%.2f", transaction.amount),
-            style = MaterialTheme.typography.bodyLarge
-        )
     }
-    HorizontalDivider() // replaced Divider with HorizontalDivider
 }

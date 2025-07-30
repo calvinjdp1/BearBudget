@@ -39,5 +39,11 @@ interface ApiService {
     @DELETE("cards/{name}")
     suspend fun deleteCard(@Path("name") name: String)
 
+    @POST("accounts/{accountName}/adjust")
+    suspend fun adjustAccountFunds(
+        @Path("accountName") accountName: String,
+        @Body request: AdjustmentRequest
+    )
+
 
 }

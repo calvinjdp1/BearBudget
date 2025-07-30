@@ -10,6 +10,15 @@ import com.example.bearbudget.network.Transaction
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import com.example.bearbudget.network.AdjustmentRequest
+
+
+// --- New request model for adjustment ---
+data class AdjustmentRequest(
+    val action: String,
+    val amount: Double,
+    val description: String? = null
+)
 
 class AccountsViewModel : ViewModel() {
     private val api = ApiClient.apiService
@@ -68,4 +77,21 @@ class AccountsViewModel : ViewModel() {
             }
         }
     }
+
+    // --- New function to adjust account funds ---
+    fun adjustAccountFunds(accountName: String, action: String, amount: Double) {
+        viewModelScope.launch {
+            try {
+                api.adjustAccountFunds(accountName, AdjustmentRequest(action, amount))
+                // Refresh accounts and transactions after adjustment
+                fetchAccounts()
+                fetchTransactions(getCurrentMonth(), accountName)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 }
+
+// Helper to get current month (for refresh after adjustment)
+

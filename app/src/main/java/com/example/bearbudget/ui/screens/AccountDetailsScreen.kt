@@ -18,6 +18,7 @@ import java.time.LocalDate
 @Composable
 fun AccountDetailsScreen(
     accountName: String,
+    accountType: String = "Bank",   // Pass actual type when navigating
     viewModel: AccountsViewModel = viewModel()
 ) {
     var selectedMonth by remember { mutableStateOf(getCurrentMonth()) }
@@ -27,56 +28,70 @@ fun AccountDetailsScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
+    // Manage Funds dialog
+    var showAdjustDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(selectedMonth, accountName) {
         viewModel.fetchTransactions(selectedMonth, accountName)
     }
 
-    // Calculate balance using transaction types (expenses negative, income positive)
+    // Calculate balance (expenses negative, income positive)
     val balance = remember(transactions) {
         transactions.sumOf { tx ->
             when (tx.transaction_type) {
                 "expense" -> -tx.amount
                 "income" -> tx.amount
-                "transfer" -> 0.0 // ignore transfer for balance calculation
                 else -> 0.0
             }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text(text = accountName, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Balance: $${String.format("%.2f", balance)}",
-            style = MaterialTheme.typography.titleMedium,
-            color = if (balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(16.dp))
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAdjustDialog = true }) {
+                Text("+") // Simple label; you can replace with Icon
+            }
+        }
+    ) { innerPadding ->
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+            .padding(16.dp)) {
+            Text(text = accountName, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Balance: $${String.format("%.2f", balance)}",
+                style = MaterialTheme.typography.titleMedium,
+                color = if (balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = selectedMonth,
-            onValueChange = { selectedMonth = it },
-            label = { Text("Month (YYYY-MM)") }
-        )
+            OutlinedTextField(
+                value = selectedMonth,
+                onValueChange = { selectedMonth = it },
+                label = { Text("Month (YYYY-MM)") }
+            )
 
-        Spacer(Modifier.height(24.dp))
-        Text(text = "Transactions for $selectedMonth", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(24.dp))
+            Text(text = "Transactions for $selectedMonth", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
 
-        if (transactions.isEmpty()) {
-            Text(text = "No transactions for this month.")
-        } else {
-            LazyColumn {
-                items(transactions) { tx ->
-                    AccountTransactionRow(transaction = tx) {
-                        selectedTransaction = tx
-                        scope.launch { sheetState.show() }
+            if (transactions.isEmpty()) {
+                Text(text = "No transactions for this month.")
+            } else {
+                LazyColumn {
+                    items(transactions) { tx ->
+                        AccountTransactionRow(transaction = tx) {
+                            selectedTransaction = tx
+                            scope.launch { sheetState.show() }
+                        }
                     }
                 }
             }
         }
     }
 
+    // Transaction details bottom sheet
     if (selectedTransaction != null) {
         ModalBottomSheet(
             sheetState = sheetState,
@@ -99,6 +114,18 @@ fun AccountDetailsScreen(
                 ) { Text("Close") }
             }
         }
+    }
+
+    // Adjust funds dialog
+    if (showAdjustDialog) {
+        AdjustFundsDialog(
+            accountType = accountType,
+            onDismiss = { showAdjustDialog = false },
+            onConfirm = { action, amount ->
+                viewModel.adjustAccountFunds(accountName, action, amount)
+                showAdjustDialog = false
+            }
+        )
     }
 }
 
@@ -131,6 +158,58 @@ fun AccountTransactionRow(transaction: Transaction, onClick: () -> Unit) {
         )
     }
     HorizontalDivider()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdjustFundsDialog(
+    accountType: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Double) -> Unit
+) {
+    var action by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    val actions = when (accountType) {
+        "Bank", "Savings" -> listOf("deposit", "withdraw", "update_balance")
+        else -> listOf("payment", "update_balance")
+    }
+    var expanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            Button(onClick = {
+                val amt = amount.toDoubleOrNull() ?: 0.0
+                onConfirm(action, amt)
+            }) { Text("Apply") }
+        },
+        dismissButton = { Button(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Adjust Funds") },
+        text = {
+            Column {
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                    OutlinedTextField(
+                        value = action,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Action") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        actions.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = { action = option; expanded = false }
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") })
+            }
+        }
+    )
 }
 
 fun getCurrentMonth(): String {
