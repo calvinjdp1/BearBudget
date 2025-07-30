@@ -20,4 +20,7 @@ interface ApiService {
 
     @DELETE("transactions/{id}")
     suspend fun deleteTransaction(@Path("id") id: Int)
+
+    @GET("summary")
+    suspend fun getSummary(): List<SummaryItem>
 }

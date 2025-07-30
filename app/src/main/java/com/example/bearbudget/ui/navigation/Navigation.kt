@@ -18,6 +18,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.bearbudget.ui.screens.TransactionsScreen
 import com.example.bearbudget.ui.screens.AddTransactionScreen
+import com.example.bearbudget.ui.screens.SummaryScreen   // <-- ADD THIS IMPORT
 
 @Composable
 fun MainNavigation() {
@@ -31,7 +32,7 @@ fun MainNavigation() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable("transactions") { TransactionsScreen() }
-            composable("summary") { Text("Summary Page") }
+            composable("summary") { SummaryScreen() } // <-- CHANGED HERE
             composable("accounts") { Text("Accounts Page") }
             composable("add_transaction") {
                 AddTransactionScreen(
