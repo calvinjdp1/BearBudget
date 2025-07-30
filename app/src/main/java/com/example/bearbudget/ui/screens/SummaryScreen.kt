@@ -17,6 +17,14 @@ fun SummaryScreen(viewModel: SummaryViewModel = viewModel()) {
     val summary by viewModel.summary.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
 
+    val totalBudgeted = viewModel.totalBudgeted()
+    val totalRemaining = viewModel.totalRemaining()
+    val totalRemainingColor = if (totalRemaining < 0) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         // Top totals
         Text(
@@ -25,12 +33,13 @@ fun SummaryScreen(viewModel: SummaryViewModel = viewModel()) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Total Budgeted: $${String.format("%.2f", viewModel.totalBudgeted())}",
+            text = "Total Budgeted: $${String.format("%.2f", totalBudgeted)}",
             style = MaterialTheme.typography.titleMedium
         )
         Text(
-            text = "Total Remaining: $${String.format("%.2f", viewModel.totalRemaining())}",
-            style = MaterialTheme.typography.titleMedium
+            text = "Total Remaining: $${String.format("%.2f", totalRemaining)}",
+            style = MaterialTheme.typography.titleMedium,
+            color = totalRemainingColor
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -44,12 +53,12 @@ fun SummaryScreen(viewModel: SummaryViewModel = viewModel()) {
         ) {
             Text(
                 text = "Categories",
-                fontSize = 22.sp, // increased
+                fontSize = 22.sp,
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
                 text = "Remaining Balance",
-                fontSize = 22.sp, // increased
+                fontSize = 22.sp,
                 style = MaterialTheme.typography.titleMedium
             )
         }
@@ -72,10 +81,16 @@ fun SummaryScreen(viewModel: SummaryViewModel = viewModel()) {
 
 @Composable
 fun CategorySummaryRow(item: SummaryItem, isExpanded: Boolean, onClick: () -> Unit) {
+    val remainingColor = if (item.remaining < 0) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 12.dp) // slightly more space around each row
             .clickable { onClick() }
     ) {
         // Always visible row
@@ -83,18 +98,36 @@ fun CategorySummaryRow(item: SummaryItem, isExpanded: Boolean, onClick: () -> Un
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(item.category, fontSize = 20.sp, style = MaterialTheme.typography.bodyLarge)
-            Text("$${String.format("%.2f", item.remaining)}", fontSize = 20.sp, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                item.category,
+                fontSize = 20.sp,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                "$${String.format("%.2f", item.remaining)}",
+                fontSize = 20.sp,
+                style = MaterialTheme.typography.bodyLarge,
+                color = remainingColor
+            )
         }
 
-        // Expanded details
+        // Expanded details with generous spacing
         if (isExpanded) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("Used: $${String.format("%.2f", item.amount_used)}", fontSize = 18.sp)
-            Text("Rollover: $${String.format("%.2f", item.rollover)}", fontSize = 18.sp)
-            Text("Budget: $${String.format("%.2f", item.budget)}", fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(12.dp)) // space above expanded details
+            Column(
+                modifier = Modifier
+                    .padding(start = 12.dp, end = 8.dp)
+            ) {
+                Text("Used: $${String.format("%.2f", item.amount_used)}", fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Rollover: $${String.format("%.2f", item.rollover)}", fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Budget: $${String.format("%.2f", item.budget)}", fontSize = 18.sp)
+            }
+            Spacer(modifier = Modifier.height(12.dp)) // space below expanded details
         }
 
-        HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
     }
 }
+
