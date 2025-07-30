@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.bearbudget.network.AccountItem
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,22 +30,27 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Button(onClick = { showDialog = true }) {
-                    Text("Add Account")
-                }
+                Button(onClick = { showDialog = true }) { Text("Add Account") }
             }
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp)
         ) {
             Text("Accounts", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(accounts) { account ->
-                    AccountItemRow(account = account) {
-                        navController.navigate("account_details/${account.name}")
+            if (accounts.isEmpty()) {
+                Text("No accounts available.")
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(accounts) { account ->
+                        AccountItemRow(account = account) {
+                            navController.navigate("account_details/${account.name}")
+                        }
                     }
                 }
             }
@@ -64,23 +70,30 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
 
 @Composable
 fun AccountItemRow(account: AccountItem, onClick: () -> Unit) {
-    val balance = if (account.type == "Credit Card" || account.type == "Loan") {
-        -kotlin.math.abs(account.balance)
-    } else account.balance
-    val balanceColor = if (balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val balance = account.balance
+    val balanceColor = if (balance < 0) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.primary
 
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column {
             Text(account.name, style = MaterialTheme.typography.titleMedium)
             Text(account.type, style = MaterialTheme.typography.bodySmall)
         }
-        Text("$${String.format("%.2f", balance)}", style = MaterialTheme.typography.titleMedium, color = balanceColor)
+        Text(
+            "$${String.format("%.2f", balance)}",
+            style = MaterialTheme.typography.titleMedium,
+            color = balanceColor
+        )
     }
     Divider()
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
