@@ -28,9 +28,14 @@ fun MainNavigation() {
             composable("transactions") { TransactionsScreen() }
             composable("summary") { SummaryScreen() }
             composable("accounts") { AccountsScreen(navController) }
-            composable("account_details/{accountName}") { backStackEntry ->
+            composable("account_details/{accountName}?type={accountType}") { backStackEntry ->
                 val accountName = backStackEntry.arguments?.getString("accountName") ?: ""
-                AccountDetailsScreen(accountName)
+                val accountType = backStackEntry.arguments?.getString("accountType") ?: "Bank"
+                AccountDetailsScreen(
+                    accountName = accountName,
+                    accountType = accountType,
+                    navController = navController
+                )
             }
         }
     }
@@ -50,19 +55,12 @@ fun BottomNavigationBar(navController: androidx.navigation.NavHostController) {
             NavigationBarItem(
                 selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
                 onClick = {
-                    when (item.route) {
-                        "accounts" -> {
-                            // Clear stack up to root and open accounts overview fresh
-                            navController.popBackStack("accounts", inclusive = true)
-                            navController.navigate("accounts")
-                        }
-                        else -> {
-                            // Standard navigation for Transactions & Summary (keeps state)
-                            navController.navigate(item.route) {
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        }
+                    if (item.route == "accounts") {
+                        navController.popBackStack("accounts", inclusive = true)
+                    }
+                    navController.navigate(item.route) {
+                        launchSingleTop = true
+                        restoreState = true
                     }
                 },
                 icon = { Icon(item.icon, contentDescription = item.label) },

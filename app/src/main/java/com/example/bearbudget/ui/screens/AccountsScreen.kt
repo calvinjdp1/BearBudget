@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -26,14 +27,12 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
 
     LaunchedEffect(Unit) { viewModel.fetchAccounts() }
 
-    // ---- Normalize balances for debt accounts ----
-    val normalizedAccounts = accounts.map {
-        if (it.type == "Credit Card" || it.type == "Loan" || it.type == "Debt") {
-            it.copy(balance = -abs(it.balance))
-        } else {
-            it
-        }
-    }
+    // --- Calculate totals ---
+    val totalSavings = accounts.filter { it.type != "Credit Card" && it.type != "Loan" && it.type != "Debt" }
+        .sumOf { it.balance }
+    val totalDebt = accounts.filter { it.type == "Credit Card" || it.type == "Loan" || it.type == "Debt" }
+        .sumOf { abs(it.balance) }
+    val netWorth = totalSavings - totalDebt
 
     Scaffold(
         floatingActionButton = {
@@ -48,65 +47,50 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            Text("Accounts Overview", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ---- Totals Summary ----
-            val totalSavings = normalizedAccounts
-                .filter { it.type == "Debit" || it.type == "Savings" || it.type == "Bank" }
-                .sumOf { it.balance }
-
-            val totalDebt = normalizedAccounts
-                .filter { it.type == "Credit Card" || it.type == "Loan" || it.type == "Debt" }
-                .sumOf { abs(it.balance) }
-
-            val netTotal = totalSavings - totalDebt
-
+            // --- Gray Box Summary ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2E2E2E)), // Dark gray box
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Total Savings: $${String.format("%.2f", totalSavings)}",
-                        style = MaterialTheme.typography.titleMedium)
-                    Text("Total Debt: $${String.format("%.2f", totalDebt)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.error)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("Net Total: $${String.format("%.2f", netTotal)}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = if (netTotal < 0) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.primary)
+                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Net Worth big and color based on value
+                    Text(
+                        text = "Net Worth: $${String.format("%.2f", netWorth)}",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = if (netWorth < 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Total Savings: $${String.format("%.2f", totalSavings)}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Total Debt: ${if (totalDebt == 0.0) "$0.00" else "-$${String.format("%.2f", totalDebt)}"}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            Text("Accounts", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(16.dp))
 
-            if (normalizedAccounts.isEmpty()) {
+            if (accounts.isEmpty()) {
                 Text("No accounts available.")
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(normalizedAccounts) { account ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { navController.navigate("account_details/${account.name}") }
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(account.name, style = MaterialTheme.typography.titleMedium)
-                                Text(account.type, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Text(
-                                "$${String.format("%.2f", account.balance)}",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = if (account.balance < 0)
-                                    MaterialTheme.colorScheme.error
-                                else MaterialTheme.colorScheme.primary
-                            )
+                    items(accounts) { account ->
+                        AccountItemRow(account = account) {
+                            navController.navigate("account_details/${account.name}?type=${account.type}")
                         }
-                        Divider()
                     }
                 }
             }
@@ -116,7 +100,7 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
     if (showDialog) {
         AddAccountDialog(
             onDismiss = { showDialog = false },
-            onAdd = { name: String, type: String, balance: Double ->
+            onAdd = { name, type, balance ->
                 viewModel.addAccount(name, type, balance)
                 showDialog = false
             }
@@ -124,12 +108,39 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
     }
 }
 
+@Composable
+fun AccountItemRow(account: AccountItem, onClick: () -> Unit) {
+    val balance = if (account.type == "Credit Card" || account.type == "Loan" || account.type == "Debt") {
+        -abs(account.balance)
+    } else {
+        account.balance
+    }
+
+    val balanceColor = if (balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(account.name, style = MaterialTheme.typography.titleMedium)
+            Text(account.type, style = MaterialTheme.typography.bodySmall)
+        }
+        Text(
+            "$${String.format("%.2f", balance)}",
+            style = MaterialTheme.typography.titleMedium,
+            color = balanceColor
+        )
+    }
+    Divider()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddAccountDialog(
-    onDismiss: () -> Unit,
-    onAdd: (String, String, Double) -> Unit
-) {
+fun AddAccountDialog(onDismiss: () -> Unit, onAdd: (String, String, Double) -> Unit) {
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("Debit") }
     var balance by remember { mutableStateOf("") }
@@ -148,11 +159,7 @@ fun AddAccountDialog(
         title = { Text("Add Account") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Account Name") }
-                )
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Account Name") })
                 Spacer(Modifier.height(12.dp))
                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
                     OutlinedTextField(

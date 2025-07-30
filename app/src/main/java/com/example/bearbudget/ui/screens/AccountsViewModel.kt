@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import com.example.bearbudget.network.AdjustmentRequest
+import com.example.bearbudget.network.TransferRequest
+import java.time.LocalDate
 
 
 // --- New request model for adjustment ---
@@ -91,6 +93,48 @@ class AccountsViewModel : ViewModel() {
             }
         }
     }
+    fun deleteBank(name: String) {
+        viewModelScope.launch {
+            try {
+                api.deleteBank(name)
+                fetchAccounts()
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    fun deleteDebt(name: String) {
+        viewModelScope.launch {
+            try {
+                api.deleteDebt(name)
+                fetchAccounts()
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
+
+    fun transferFunds(from: String, to: String, amount: Double) {
+        viewModelScope.launch {
+            try {
+                val transfer = TransferRequest(
+                    date = java.time.LocalDate.now().toString(),
+                    from_account = from,
+                    to_account = to,
+                    amount = amount
+                )
+                api.makeTransfer(transfer)
+                fetchAccounts()
+                fetchTransactions(getCurrentMonth(), to)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+
+
+
+
+
+
 }
 
 // Helper to get current month (for refresh after adjustment)

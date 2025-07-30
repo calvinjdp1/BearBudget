@@ -45,5 +45,17 @@ interface ApiService {
         @Body request: AdjustmentRequest
     )
 
+    @DELETE("banks/{name}")
+    suspend fun deleteBank(@Path("name") name: String)
+
+    @DELETE("debts/{name}")
+    suspend fun deleteDebt(@Path("name") name: String)
+
+
+    @POST("/transfer")
+    suspend fun makeTransfer(@Body transfer: TransferRequest)
+
+
+
 
 }
