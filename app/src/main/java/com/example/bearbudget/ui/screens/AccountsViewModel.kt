@@ -14,7 +14,6 @@ import com.example.bearbudget.network.AdjustmentRequest
 import com.example.bearbudget.network.TransferRequest
 import java.time.LocalDate
 
-
 // --- New request model for adjustment ---
 data class AdjustmentRequest(
     val action: String,
@@ -39,12 +38,18 @@ class AccountsViewModel : ViewModel() {
                 val debts = response["debts"] as List<Map<String, Any>>
                 val all = mutableListOf<AccountItem>()
 
+                // Banks always positive
                 banks.forEach {
-                    all.add(AccountItem(it["name"] as String, (it["balance"] as Number).toDouble(), "Bank"))
+                    val balance = (it["balance"] as Number).toDouble()
+                    all.add(AccountItem(it["name"] as String, balance, "Bank"))
                 }
+
+                // Debts always negative (normalized)
                 debts.forEach {
-                    all.add(AccountItem(it["name"] as String, (it["balance"] as Number).toDouble(), "Debt"))
+                    val balance = (it["balance"] as Number).toDouble()
+                    all.add(AccountItem(it["name"] as String, -kotlin.math.abs(balance), "Debt"))
                 }
+
                 _accounts.value = all
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -71,16 +76,42 @@ class AccountsViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val data = api.getTransactions()
-                _transactions.value = data.filter {
-                    it.date.startsWith(month) && it.card == accountName
+                val filtered = data.filter { it.date.startsWith(month) && it.card == accountName }
+                    .map { tx ->
+                        val isTransfer = tx.description.isNullOrBlank() || tx.description.equals("no description", true)
+                        val desc = if (isTransfer) "Transfer" else tx.description
+                        val category = if (isTransfer) {
+                            if (tx.card == accountName) "Withdrawal" else "Deposit"
+                        } else tx.category ?: if (tx.amount >= 0) "Deposit" else "Withdrawal"
+                        tx.copy(description = desc, category = category)
+                    }.toMutableList()
+
+                // --- Mirror transfers for destination accounts (if viewing accountB) ---
+                if (filtered.isEmpty() && accountName != "") {
+                    val incomingTransfers = data.filter {
+                        it.date.startsWith(month) &&
+                                it.description.equals("no description", true) &&
+                                it.card != accountName
+                    }
+                    incomingTransfers.forEach { transfer ->
+                        filtered.add(
+                            transfer.copy(
+                                card = accountName,
+                                description = "Transfer",
+                                category = "Deposit"
+                            )
+                        )
+                    }
                 }
+                _transactions.value = filtered
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    // --- New function to adjust account funds ---
+
+    // --- Adjust account funds ---
     fun adjustAccountFunds(accountName: String, action: String, amount: Double) {
         viewModelScope.launch {
             try {
@@ -93,12 +124,15 @@ class AccountsViewModel : ViewModel() {
             }
         }
     }
+
     fun deleteBank(name: String) {
         viewModelScope.launch {
             try {
                 api.deleteBank(name)
                 fetchAccounts()
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -107,7 +141,9 @@ class AccountsViewModel : ViewModel() {
             try {
                 api.deleteDebt(name)
                 fetchAccounts()
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -115,7 +151,7 @@ class AccountsViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val transfer = TransferRequest(
-                    date = java.time.LocalDate.now().toString(),
+                    date = LocalDate.now().toString(),
                     from_account = from,
                     to_account = to,
                     amount = amount
@@ -128,14 +164,5 @@ class AccountsViewModel : ViewModel() {
             }
         }
     }
-
-
-
-
-
-
-
 }
-
-// Helper to get current month (for refresh after adjustment)
 

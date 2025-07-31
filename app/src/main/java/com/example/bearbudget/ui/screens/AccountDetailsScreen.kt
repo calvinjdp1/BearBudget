@@ -31,6 +31,10 @@ fun AccountDetailsScreen(
 ) {
     var selectedMonth by remember { mutableStateOf(getCurrentMonth()) }
     val transactions by viewModel.transactions.collectAsState()
+    val accounts by viewModel.accounts.collectAsState()
+    val account = accounts.find { it.name == accountName }
+    val balance = account?.balance ?: startingBalance
+
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showActionDialog by remember { mutableStateOf(false) }
@@ -41,15 +45,7 @@ fun AccountDetailsScreen(
 
     LaunchedEffect(selectedMonth, accountName) {
         viewModel.fetchTransactions(selectedMonth, accountName)
-        viewModel.fetchAccounts() // make sure accounts list is available for transfer/payment
-    }
-
-    val balance = remember(transactions, accountType) {
-        var bal = startingBalance
-        transactions.forEach {
-            bal += if (accountType in listOf("Credit Card", "Loan", "Debt")) it.amount else -it.amount
-        }
-        bal
+        viewModel.fetchAccounts()
     }
 
     Scaffold(
@@ -77,7 +73,6 @@ fun AccountDetailsScreen(
             )
             Spacer(Modifier.height(16.dp))
 
-            // --- Action Buttons ---
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (accountType in listOf("Credit Card", "Loan", "Debt")) {
                     Button(onClick = { actionType = "payment"; showActionDialog = true }) {
@@ -116,35 +111,52 @@ fun AccountDetailsScreen(
             } else {
                 LazyColumn {
                     items(transactions) { tx ->
+                        val isTransfer = tx.description.isNullOrBlank() || tx.description.equals("no description", true)
+                        val desc = if (isTransfer) "Transfer" else tx.description
+                        val category = if (isTransfer) {
+                            if (tx.card == accountName) "Withdrawal" else "Deposit"
+                        } else tx.category ?: if (tx.amount >= 0) "Deposit" else "Withdrawal"
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    selectedTransaction = tx
+                                    selectedTransaction = tx.copy(description = desc, category = category)
                                     scope.launch { sheetState.show() }
                                 }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    tx.description?.ifBlank { "No Description" } ?: "No Description",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    "Category: ${tx.category?.ifBlank { "No Category" } ?: "No Category"}",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                                Text(desc ?: "Transfer", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                Text("Category: $category", style = MaterialTheme.typography.bodySmall)
                             }
                             val amountColor = if (tx.amount < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                            Text(
-                                text = "$${String.format("%.2f", tx.amount)}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = amountColor
-                            )
+                            Text("$${String.format("%.2f", tx.amount)}", style = MaterialTheme.typography.bodyLarge, color = amountColor)
                         }
                         Divider()
+                    }
+
+                    // --- Mirror entry if no transfer transaction is present for this account ---
+                    val hasTransfer = transactions.any {
+                        it.description.equals("no description", true) || it.description.equals("Transfer", true)
+                    }
+                    if (!hasTransfer) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Transfer", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                    Text("Category: Deposit", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("$0.00", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                            }
+                            Divider()
+                        }
                     }
                 }
             }
@@ -156,7 +168,10 @@ fun AccountDetailsScreen(
             sheetState = sheetState,
             onDismissRequest = { selectedTransaction = null }
         ) {
-            TransactionDetailContent(transaction = selectedTransaction!!) {
+            TransactionDetailContent(
+                transaction = selectedTransaction!!,
+                accountName = accountName
+            ) {
                 selectedTransaction = null
                 scope.launch { sheetState.hide() }
             }
@@ -167,16 +182,15 @@ fun AccountDetailsScreen(
         ConfirmDeleteDialog(
             accountName = accountName,
             onConfirm = {
-                if (accountType in listOf("Credit Card", "Loan", "Debt")) {
+                val accountToDelete = viewModel.accounts.value.find { it.name == accountName }
+                if (accountToDelete?.type == "Debt") {
                     viewModel.deleteDebt(accountName)
                 } else {
                     viewModel.deleteBank(accountName)
                 }
                 showDeleteDialog = false
                 viewModel.fetchAccounts()
-                navController.navigate("accounts") {
-                    popUpTo("accounts") { inclusive = true }
-                }
+                navController.popBackStack()
             },
             onDismiss = { showDeleteDialog = false }
         )
@@ -184,7 +198,7 @@ fun AccountDetailsScreen(
 
     if (showActionDialog) {
         val destinationAccounts = viewModel.accounts.value
-            .filter { it.name != accountName } // exclude current account
+            .filter { it.name != accountName }
             .map { it.name }
 
         MoneyActionDialog(
@@ -198,6 +212,8 @@ fun AccountDetailsScreen(
                     else -> viewModel.adjustAccountFunds(accountName, actionType, amount)
                 }
                 showActionDialog = false
+                viewModel.fetchAccounts()
+                navController.popBackStack() // <-- Go back to main accounts page
             }
         )
     }
@@ -265,17 +281,19 @@ fun getCurrentMonth(): String {
 }
 
 @Composable
-fun TransactionDetailContent(transaction: Transaction, onClose: () -> Unit) {
+fun TransactionDetailContent(transaction: Transaction, accountName: String, onClose: () -> Unit) {
+    val isTransfer = transaction.description.isNullOrBlank() || transaction.description.equals("no description", true)
+    val desc = if (isTransfer) "Transfer" else transaction.description
+    val category = if (isTransfer) {
+        if (transaction.card == accountName) "Withdrawal" else "Deposit"
+    } else transaction.category ?: if (transaction.amount >= 0) "Deposit" else "Withdrawal"
+
     Column(modifier = Modifier.padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = transaction.description?.ifBlank { "No Description" } ?: "No Description",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+            Text(desc ?: "Transfer", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
                 text = "$${String.format("%.2f", transaction.amount)}",
                 style = MaterialTheme.typography.titleLarge,
@@ -284,7 +302,7 @@ fun TransactionDetailContent(transaction: Transaction, onClose: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Text("Date: ${transaction.date}", style = MaterialTheme.typography.bodyLarge)
-        Text("Category: ${transaction.category ?: "N/A"}", style = MaterialTheme.typography.bodyLarge)
+        Text("Category: $category", style = MaterialTheme.typography.bodyLarge)
         Text("Account/Card: ${transaction.card ?: "N/A"}", style = MaterialTheme.typography.bodyLarge)
         if (!transaction.notes.isNullOrBlank()) {
             Text("Notes: ${transaction.notes}", style = MaterialTheme.typography.bodyLarge)
@@ -301,10 +319,7 @@ fun ConfirmDeleteDialog(accountName: String, onConfirm: () -> Unit, onDismiss: (
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
                 Text("Delete")
             }
         },

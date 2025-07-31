@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -19,15 +20,38 @@ import kotlin.math.abs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = viewModel()) {
-    val accounts by viewModel.accounts.collectAsState()
+    val rawAccounts by viewModel.accounts.collectAsState()
+
+    // --- Normalize debt accounts (Credit Cards & Loans always negative) ---
+    val accounts = rawAccounts.map { account ->
+        if (account.type.equals("Credit Card", ignoreCase = true) ||
+            account.type.equals("Loan", ignoreCase = true)
+        ) {
+            account.copy(balance = -abs(account.balance))
+        } else account
+    }
+
     var showDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.fetchAccounts() }
 
+    // --- Summary values after normalization ---
+    val totalDebt = accounts.filter {
+        it.balance < 0
+    }.sumOf { abs(it.balance) }
+
+    val totalSavings = accounts.filter {
+        it.balance >= 0
+    }.sumOf { it.balance }
+
+    val netWorth = totalSavings - totalDebt
+
     Scaffold(
         bottomBar = {
             Box(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Button(onClick = { showDialog = true }) { Text("Add Account") }
@@ -40,6 +64,10 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
+            // --- Summary Bar (Top) ---
+            SummaryBar(netWorth = netWorth, totalSavings = totalSavings, totalDebt = totalDebt)
+
+            Spacer(modifier = Modifier.height(16.dp))
             Text("Accounts", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -69,9 +97,42 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
 }
 
 @Composable
+fun SummaryBar(netWorth: Double, totalSavings: Double, totalDebt: Double) {
+    val netColor = if (netWorth < 0) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.onSurface
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Net Worth: $${String.format("%.2f", netWorth)}",
+                style = MaterialTheme.typography.headlineSmall,
+                color = netColor
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Total Savings: $${String.format("%.2f", totalSavings)}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White
+            )
+            Text(
+                text = "Total Debt: $${String.format("%.2f", totalDebt)}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+    Divider(modifier = Modifier.padding(vertical = 8.dp))
+}
+
+@Composable
 fun AccountItemRow(account: AccountItem, onClick: () -> Unit) {
-    val balance = account.balance
-    val balanceColor = if (balance < 0) MaterialTheme.colorScheme.error
+    val balanceColor = if (account.balance < 0) MaterialTheme.colorScheme.error
     else MaterialTheme.colorScheme.primary
 
     Row(
@@ -86,14 +147,13 @@ fun AccountItemRow(account: AccountItem, onClick: () -> Unit) {
             Text(account.type, style = MaterialTheme.typography.bodySmall)
         }
         Text(
-            "$${String.format("%.2f", balance)}",
+            "$${String.format("%.2f", account.balance)}",
             style = MaterialTheme.typography.titleMedium,
             color = balanceColor
         )
     }
     Divider()
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

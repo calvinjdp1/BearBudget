@@ -17,8 +17,9 @@ fun SummaryScreen(viewModel: SummaryViewModel = viewModel()) {
     val summary by viewModel.summary.collectAsState()
     var expandedCategory by remember { mutableStateOf<String?>(null) }
 
-    val totalBudgeted = viewModel.totalBudgeted()
-    val totalRemaining = viewModel.totalRemaining()
+    // Compute totals directly from summary
+    val totalBudgeted = summary.sumOf { it.budget }
+    val totalRemaining = summary.sumOf { it.remaining }
     val totalRemainingColor = if (totalRemaining < 0) {
         MaterialTheme.colorScheme.error
     } else {
@@ -90,7 +91,7 @@ fun CategorySummaryRow(item: SummaryItem, isExpanded: Boolean, onClick: () -> Un
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp) // slightly more space around each row
+            .padding(vertical = 12.dp)
             .clickable { onClick() }
     ) {
         // Always visible row
@@ -111,23 +112,19 @@ fun CategorySummaryRow(item: SummaryItem, isExpanded: Boolean, onClick: () -> Un
             )
         }
 
-        // Expanded details with generous spacing
+        // Expanded details
         if (isExpanded) {
-            Spacer(modifier = Modifier.height(12.dp)) // space above expanded details
-            Column(
-                modifier = Modifier
-                    .padding(start = 12.dp, end = 8.dp)
-            ) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Column(modifier = Modifier.padding(start = 12.dp, end = 8.dp)) {
                 Text("Used: $${String.format("%.2f", item.amount_used)}", fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Rollover: $${String.format("%.2f", item.rollover)}", fontSize = 18.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Budget: $${String.format("%.2f", item.budget)}", fontSize = 18.sp)
             }
-            Spacer(modifier = Modifier.height(12.dp)) // space below expanded details
+            Spacer(modifier = Modifier.height(12.dp))
         }
 
         HorizontalDivider(modifier = Modifier.padding(top = 12.dp))
     }
 }
-
