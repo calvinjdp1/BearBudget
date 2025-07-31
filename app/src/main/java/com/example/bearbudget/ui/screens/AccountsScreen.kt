@@ -5,13 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -27,17 +24,13 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
 
     LaunchedEffect(Unit) { viewModel.fetchAccounts() }
 
-    // --- Calculate totals ---
-    val totalSavings = accounts.filter { it.type != "Credit Card" && it.type != "Loan" && it.type != "Debt" }
-        .sumOf { it.balance }
-    val totalDebt = accounts.filter { it.type == "Credit Card" || it.type == "Loan" || it.type == "Debt" }
-        .sumOf { abs(it.balance) }
-    val netWorth = totalSavings - totalDebt
-
     Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Account")
+        bottomBar = {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Button(onClick = { showDialog = true }) { Text("Add Account") }
             }
         }
     ) { innerPadding ->
@@ -47,39 +40,6 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // --- Gray Box Summary ---
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2E2E2E)), // Dark gray box
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Net Worth big and color based on value
-                    Text(
-                        text = "Net Worth: $${String.format("%.2f", netWorth)}",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = if (netWorth < 0) MaterialTheme.colorScheme.error else Color(0xFF4CAF50)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Total Savings: $${String.format("%.2f", totalSavings)}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Total Debt: ${if (totalDebt == 0.0) "$0.00" else "-$${String.format("%.2f", totalDebt)}"}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
             Text("Accounts", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -89,7 +49,7 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(accounts) { account ->
                         AccountItemRow(account = account) {
-                            navController.navigate("account_details/${account.name}?type=${account.type}")
+                            navController.navigate("account_details/${account.name}")
                         }
                     }
                 }
@@ -110,13 +70,9 @@ fun AccountsScreen(navController: NavController, viewModel: AccountsViewModel = 
 
 @Composable
 fun AccountItemRow(account: AccountItem, onClick: () -> Unit) {
-    val balance = if (account.type == "Credit Card" || account.type == "Loan" || account.type == "Debt") {
-        -abs(account.balance)
-    } else {
-        account.balance
-    }
-
-    val balanceColor = if (balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val balance = account.balance
+    val balanceColor = if (balance < 0) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.primary
 
     Row(
         modifier = Modifier
@@ -137,6 +93,7 @@ fun AccountItemRow(account: AccountItem, onClick: () -> Unit) {
     }
     Divider()
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
