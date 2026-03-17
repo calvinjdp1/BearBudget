@@ -15,11 +15,7 @@ import com.example.bearbudget.network.TransferRequest
 import java.time.LocalDate
 
 // --- New request model for adjustment ---
-data class AdjustmentRequest(
-    val action: String,
-    val amount: Double,
-    val description: String? = null
-)
+
 
 class AccountsViewModel : ViewModel() {
     private val api = ApiClient.apiService

@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -38,6 +39,7 @@ import java.time.format.DateTimeParseException
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
+    val context = LocalContext.current
     val transactions by viewModel.transactions.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val cards by viewModel.cards.collectAsState()
@@ -113,7 +115,7 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                 categories = categories,
                 cards = cards,
                 onUpdate = { updated ->
-                    viewModel.updateTransaction(updated.id!!, updated) {
+                    viewModel.updateTransaction(context, updated.id!!, updated) {
                         scope.launch { sheetState.hide() }
                         selectedTransaction = null
                     }
@@ -123,7 +125,8 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                         scope.launch { sheetState.hide() }
                         selectedTransaction = null
                     }
-                }
+                },
+                viewModel = viewModel
             )
         }
     }

@@ -1,28 +1,38 @@
 package com.example.bearbudget.ui.screens
 
+import android.app.DownloadManager
+import android.content.Context
 import android.net.Uri
+import android.os.Environment
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,21 +44,26 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
 import com.example.bearbudget.network.Transaction
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,25 +73,53 @@ fun TransactionDetails(
     categories: List<String>,
     cards: List<String>,
     onUpdate: (Transaction) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    viewModel: TransactionsViewModel = viewModel()
 ) {
     var isEditing by remember(transaction.id) { mutableStateOf(false) }
+    val isUploading by viewModel.isUploading.collectAsState()
 
-    if (isEditing) {
-        EditTransactionForm(
-            transaction = transaction,
-            categories = categories,
-            cards = cards,
-            onUpdate = onUpdate,
-            onDelete = onDelete,
-            onCancelEdit = { isEditing = false }
-        )
-    } else {
-        TransactionDetailsView(
-            transaction = transaction,
-            onEditClick = { isEditing = true },
-            onDelete = onDelete
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (isEditing) {
+            EditTransactionForm(
+                transaction = transaction,
+                categories = categories,
+                cards = cards,
+                onUpdate = onUpdate,
+                onDelete = onDelete,
+                onCancelEdit = { isEditing = false },
+                isUploading = isUploading
+            )
+        } else {
+            TransactionDetailsView(
+                transaction = transaction,
+                onEditClick = { isEditing = true },
+                onDelete = onDelete,
+                isUploading = isUploading
+            )
+        }
+
+        if (isUploading) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black.copy(alpha = 0.35f)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Uploading receipt...",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -84,8 +127,11 @@ fun TransactionDetails(
 private fun TransactionDetailsView(
     transaction: Transaction,
     onEditClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isUploading: Boolean
 ) {
+    val context = LocalContext.current
+
     val descriptionLines = remember(transaction.description) {
         transaction.description
             ?.lines()
@@ -118,7 +164,10 @@ private fun TransactionDetailsView(
                 fontWeight = FontWeight.SemiBold
             )
 
-            IconButton(onClick = onEditClick) {
+            IconButton(
+                onClick = onEditClick,
+                enabled = !isUploading
+            ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = "Edit transaction"
@@ -167,15 +216,42 @@ private fun TransactionDetailsView(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = transaction.receiptImageUri,
                 contentDescription = "Receipt image",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .wrapContentHeight()
                     .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.FillWidth,
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    downloadReceiptImage(
+                        context = context,
+                        imageUrl = transaction.receiptImageUri
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isUploading
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Download Receipt")
+            }
         }
 
         if (!transaction.notes.isNullOrBlank()) {
@@ -205,7 +281,8 @@ private fun TransactionDetailsView(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
             ),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploading
         ) {
             Text("Delete")
         }
@@ -240,7 +317,8 @@ private fun EditTransactionForm(
     cards: List<String>,
     onUpdate: (Transaction) -> Unit,
     onDelete: () -> Unit,
-    onCancelEdit: () -> Unit
+    onCancelEdit: () -> Unit,
+    isUploading: Boolean
 ) {
     val context = LocalContext.current
 
@@ -312,7 +390,10 @@ private fun EditTransactionForm(
                 fontWeight = FontWeight.SemiBold
             )
 
-            IconButton(onClick = onCancelEdit) {
+            IconButton(
+                onClick = onCancelEdit,
+                enabled = !isUploading
+            ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
                     contentDescription = "Back to details"
@@ -327,13 +408,16 @@ private fun EditTransactionForm(
             onValueChange = { date = it },
             label = { Text("Date (YYYY-MM-DD)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploading
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         ExposedDropdownMenuBox(
             expanded = expandedCategory,
-            onExpandedChange = { expandedCategory = !expandedCategory }
+            onExpandedChange = {
+                if (!isUploading) expandedCategory = !expandedCategory
+            }
         ) {
             OutlinedTextField(
                 value = selectedCategory,
@@ -345,7 +429,8 @@ private fun EditTransactionForm(
                 },
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                enabled = !isUploading
             )
 
             DropdownMenu(
@@ -367,7 +452,9 @@ private fun EditTransactionForm(
 
         ExposedDropdownMenuBox(
             expanded = expandedCard,
-            onExpandedChange = { expandedCard = !expandedCard }
+            onExpandedChange = {
+                if (!isUploading) expandedCard = !expandedCard
+            }
         ) {
             OutlinedTextField(
                 value = selectedCard,
@@ -379,7 +466,8 @@ private fun EditTransactionForm(
                 },
                 modifier = Modifier
                     .menuAnchor()
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                enabled = !isUploading
             )
 
             DropdownMenu(
@@ -403,7 +491,8 @@ private fun EditTransactionForm(
             value = description,
             onValueChange = { description = it },
             label = { Text("Description / Items") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploading
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -416,7 +505,8 @@ private fun EditTransactionForm(
             },
             label = { Text("Amount") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploading
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -424,7 +514,8 @@ private fun EditTransactionForm(
             value = notes,
             onValueChange = { notes = it },
             label = { Text("Notes") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploading
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -432,7 +523,8 @@ private fun EditTransactionForm(
             value = transactionType,
             onValueChange = { transactionType = it },
             label = { Text("Transaction Type") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isUploading
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -455,7 +547,8 @@ private fun EditTransactionForm(
                     pendingCameraUri = uri
                     cameraLauncher.launch(uri)
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                enabled = !isUploading
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -464,7 +557,8 @@ private fun EditTransactionForm(
 
             OutlinedButton(
                 onClick = { galleryLauncher.launch("image/*") },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                enabled = !isUploading
             ) {
                 Icon(Icons.Default.Image, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -475,21 +569,32 @@ private fun EditTransactionForm(
         if (!receiptImageUri.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = receiptImageUri,
                 contentDescription = "Receipt preview",
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .heightIn(max = 500.dp)
                     .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.FillWidth,
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedButton(
                 onClick = { receiptImageUri = null },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isUploading
             ) {
                 Icon(Icons.Default.Delete, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -517,7 +622,8 @@ private fun EditTransactionForm(
                     )
                     onUpdate(updated)
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                enabled = !isUploading
             ) {
                 Text("Update")
             }
@@ -528,10 +634,69 @@ private fun EditTransactionForm(
                     containerColor = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError
                 ),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                enabled = !isUploading
             ) {
                 Text("Delete")
             }
         }
+    }
+}
+
+private fun downloadReceiptImage(
+    context: Context,
+    imageUrl: String
+) {
+    val uri = Uri.parse(imageUrl)
+    val scheme = uri.scheme?.lowercase()
+
+    if (scheme != "http" && scheme != "https") {
+        Toast.makeText(
+            context,
+            "Receipt must be uploaded to the server before it can be downloaded.",
+            Toast.LENGTH_LONG
+        ).show()
+        return
+    }
+
+    val fileExtension = when {
+        imageUrl.endsWith(".png", ignoreCase = true) -> ".png"
+        imageUrl.endsWith(".webp", ignoreCase = true) -> ".webp"
+        else -> ".jpg"
+    }
+
+    val fileName = "receipt_${System.currentTimeMillis()}$fileExtension"
+
+    try {
+        val request = DownloadManager.Request(uri)
+            .setTitle("Downloading receipt")
+            .setDescription(fileName)
+            .setNotificationVisibility(
+                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+            )
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(true)
+            .setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                fileName
+            )
+
+        val downloadManager =
+            context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+        downloadManager.enqueue(request)
+
+        Toast.makeText(
+            context,
+            "Download started",
+            Toast.LENGTH_SHORT
+        ).show()
+    } catch (e: Exception) {
+        e.printStackTrace()
+        Toast.makeText(
+            context,
+            "Failed to download receipt",
+            Toast.LENGTH_LONG
+        ).show()
     }
 }

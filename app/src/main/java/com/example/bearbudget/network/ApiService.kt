@@ -1,77 +1,110 @@
 package com.example.bearbudget.network
 
-import retrofit2.http.*
-
-data class BankBody(val name: String, val balance: Double)
-data class DebtBody(val name: String, val balance: Double)
+import okhttp3.MultipartBody
+import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Part
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ApiService {
-    @GET("cards")
-    suspend fun getCards(): List<Card>
 
-    @GET("transactions")
-    suspend fun getTransactions(): List<Transaction>
-
-    // Existing simple list
-    @GET("categories")
+    @GET("/categories")
     suspend fun getCategories(): List<String>
 
-    // ✅ NEW: details for edit UI
-    @GET("categories/details")
-    suspend fun getCategoryDetails(): List<CategoryConfig>
+    @GET("/cards")
+    suspend fun getCards(): List<CardOut>
 
-    // ✅ NEW: add category
-    @POST("categories")
-    suspend fun addCategory(@Body req: CategoryUpsertRequest): CategoryConfig
+    @GET("/transactions")
+    suspend fun getTransactions(
+        @Query("month") month: String? = null,
+        @Query("category") category: String? = null
+    ): List<Transaction>
 
-    // ✅ NEW: update/rename category
-    @PUT("categories/{oldName}")
-    suspend fun updateCategory(
-        @Path("oldName") oldName: String,
-        @Body req: CategoryUpsertRequest
-    ): CategoryConfig
+    @POST("/transactions")
+    suspend fun addTransaction(
+        @Body transaction: Transaction
+    ): Map<String, String>
 
-    // ✅ NEW: delete category
-    @DELETE("categories/{name}")
-    suspend fun deleteCategory(@Path("name") name: String)
+    @PUT("/transactions/{transaction_id}")
+    suspend fun updateTransaction(
+        @Path("transaction_id") id: Int,
+        @Body transaction: Transaction
+    ): Map<String, String>
 
-    @POST("transactions")
-    suspend fun addTransaction(@Body transaction: Transaction)
+    @DELETE("/transactions/{transaction_id}")
+    suspend fun deleteTransaction(
+        @Path("transaction_id") id: Int
+    ): Map<String, String>
 
-    @PUT("transactions/{id}")
-    suspend fun updateTransaction(@Path("id") id: Int, @Body transaction: Transaction)
-
-    @DELETE("transactions/{id}")
-    suspend fun deleteTransaction(@Path("id") id: Int)
-
-    @GET("summary")
+    @GET("/summary")
     suspend fun getSummary(): List<SummaryItem>
 
-    @GET("accounts")
+    @GET("/categories/details")
+    suspend fun getCategoryDetails(): List<CategoryConfig>
+
+    @POST("/categories")
+    suspend fun addCategory(
+        @Body request: CategoryUpsertRequest
+    ): CategoryConfig
+
+    @PUT("/categories/{old_name}")
+    suspend fun updateCategory(
+        @Path("old_name") oldName: String,
+        @Body request: CategoryUpsertRequest
+    ): CategoryConfig
+
+    @DELETE("/categories/{name}")
+    suspend fun deleteCategory(
+        @Path("name") name: String
+    ): Map<String, String>
+
+    @GET("/accounts")
     suspend fun getAccounts(): Map<String, Any>
 
-    @POST("banks")
-    suspend fun addBank(@Body bank: BankBody)
+    @POST("/banks")
+    suspend fun addBank(
+        @Body bank: BankBody
+    ): Map<String, String>
 
-    @POST("debts")
-    suspend fun addDebt(@Body debt: DebtBody)
+    @DELETE("/banks/{name}")
+    suspend fun deleteBank(
+        @Path("name") name: String
+    ): Map<String, String>
 
-    @DELETE("cards/{name}")
-    suspend fun deleteCard(@Path("name") name: String)
+    @POST("/debts")
+    suspend fun addDebt(
+        @Body debt: DebtBody
+    ): Map<String, String>
 
-    @POST("accounts/{accountName}/adjust")
+    @DELETE("/debts/{name}")
+    suspend fun deleteDebt(
+        @Path("name") name: String
+    ): Map<String, String>
+
+    @POST("/transfer")
+    suspend fun makeTransfer(
+        @Body request: TransferRequest
+    ): Map<String, String>
+
+    @POST("/accounts/{account_name}/adjust")
     suspend fun adjustAccountFunds(
-        @Path("accountName") accountName: String,
+        @Path("account_name") accountName: String,
         @Body request: AdjustmentRequest
-    )
+    ): Map<String, String>
 
-    @DELETE("banks/{name}")
-    suspend fun deleteBank(@Path("name") name: String)
+    @Multipart
+    @POST("/upload-receipt")
+    suspend fun uploadReceipt(
+        @Part file: MultipartBody.Part
+    ): UploadReceiptResponse
 
-    @DELETE("debts/{name}")
-    suspend fun deleteDebt(@Path("name") name: String)
-
-    // I recommend removing the leading "/" here (safer in Retrofit)
-    @POST("transfer")
-    suspend fun makeTransfer(@Body transfer: TransferRequest)
+    @DELETE("/cards/{name}")
+    suspend fun deleteCard(
+        @Path("name") name: String
+    ): Map<String, String>
 }

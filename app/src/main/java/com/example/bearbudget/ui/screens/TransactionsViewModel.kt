@@ -1,5 +1,7 @@
 package com.example.bearbudget.ui.screens
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bearbudget.network.ApiClient
@@ -12,7 +14,6 @@ class TransactionsViewModel : ViewModel() {
 
     private val api = ApiClient.apiService
 
-    // Dropdown options (only accounts)
     private val _cards = MutableStateFlow<List<String>>(emptyList())
     val cards: StateFlow<List<String>> = _cards
 
@@ -22,15 +23,15 @@ class TransactionsViewModel : ViewModel() {
     private val _transactions = MutableStateFlow<List<Transaction>>(emptyList())
     val transactions: StateFlow<List<Transaction>> = _transactions
 
+    private val _isUploading = MutableStateFlow(false)
+    val isUploading: StateFlow<Boolean> = _isUploading
+
     init {
         fetchCardsFromAccounts()
         fetchCategories()
         fetchTransactions()
     }
 
-    /**
-     * Fetch accounts and use them as card options
-     */
     fun fetchCardsFromAccounts() {
         viewModelScope.launch {
             try {
@@ -69,44 +70,89 @@ class TransactionsViewModel : ViewModel() {
         }
     }
 
+    private suspend fun uploadReceiptIfNeeded(
+        context: Context,
+        receiptImageUri: String?
+    ): String? {
+        if (receiptImageUri.isNullOrBlank()) return null
+
+        val parsed = Uri.parse(receiptImageUri)
+        val scheme = parsed.scheme?.lowercase()
+
+        if (scheme == "http" || scheme == "https") {
+            return receiptImageUri
+        }
+
+        if (scheme == "content" || scheme == "file") {
+            val part = ReceiptUploadUtils.buildMultipartPart(context, parsed)
+            val response = api.uploadReceipt(part)
+            return response.receiptImageUri
+        }
+
+        return receiptImageUri
+    }
+
     fun deleteTransaction(id: Int, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
+                _isUploading.value = true
                 api.deleteTransaction(id)
                 fetchTransactions()
                 onSuccess()
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                _isUploading.value = false
             }
         }
     }
 
-    fun updateTransaction(id: Int, transaction: Transaction, onSuccess: () -> Unit) {
+    fun updateTransaction(
+        context: Context,
+        id: Int,
+        transaction: Transaction,
+        onSuccess: () -> Unit
+    ) {
         viewModelScope.launch {
             try {
-                api.updateTransaction(id, transaction)
+                _isUploading.value = true
+                val uploadedUrl = uploadReceiptIfNeeded(context, transaction.receiptImageUri)
+                val updated = transaction.copy(receiptImageUri = uploadedUrl)
+
+                api.updateTransaction(id, updated)
                 fetchTransactions()
                 onSuccess()
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                _isUploading.value = false
             }
         }
     }
 
-    fun addTransaction(transaction: Transaction, onSuccess: () -> Unit) {
+    fun addTransaction(
+        context: Context,
+        transaction: Transaction,
+        onSuccess: () -> Unit
+    ) {
         viewModelScope.launch {
             try {
-                api.addTransaction(transaction)
+                _isUploading.value = true
+                val uploadedUrl = uploadReceiptIfNeeded(context, transaction.receiptImageUri)
+                val finalTransaction = transaction.copy(receiptImageUri = uploadedUrl)
+
+                api.addTransaction(finalTransaction)
                 fetchCardsFromAccounts()
                 fetchTransactions()
                 onSuccess()
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                _isUploading.value = false
             }
         }
     }
 
-    // Optional: Delete legacy cards if server supports it
     fun deleteCard(name: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
