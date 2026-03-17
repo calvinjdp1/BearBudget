@@ -12,8 +12,28 @@ interface ApiService {
     @GET("transactions")
     suspend fun getTransactions(): List<Transaction>
 
+    // Existing simple list
     @GET("categories")
     suspend fun getCategories(): List<String>
+
+    // ✅ NEW: details for edit UI
+    @GET("categories/details")
+    suspend fun getCategoryDetails(): List<CategoryConfig>
+
+    // ✅ NEW: add category
+    @POST("categories")
+    suspend fun addCategory(@Body req: CategoryUpsertRequest): CategoryConfig
+
+    // ✅ NEW: update/rename category
+    @PUT("categories/{oldName}")
+    suspend fun updateCategory(
+        @Path("oldName") oldName: String,
+        @Body req: CategoryUpsertRequest
+    ): CategoryConfig
+
+    // ✅ NEW: delete category
+    @DELETE("categories/{name}")
+    suspend fun deleteCategory(@Path("name") name: String)
 
     @POST("transactions")
     suspend fun addTransaction(@Body transaction: Transaction)
@@ -51,11 +71,7 @@ interface ApiService {
     @DELETE("debts/{name}")
     suspend fun deleteDebt(@Path("name") name: String)
 
-
-    @POST("/transfer")
+    // I recommend removing the leading "/" here (safer in Retrofit)
+    @POST("transfer")
     suspend fun makeTransfer(@Body transfer: TransferRequest)
-
-
-
-
 }

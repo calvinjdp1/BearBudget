@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -11,7 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -32,8 +32,16 @@ fun AccountDetailsScreen(
     var selectedMonth by remember { mutableStateOf(getCurrentMonth()) }
     val transactions by viewModel.transactions.collectAsState()
     val accounts by viewModel.accounts.collectAsState()
+
     val account = accounts.find { it.name == accountName }
     val balance = account?.balance ?: startingBalance
+
+    // ✅ Use the real type from the fetched account, not the navigation argument
+    val resolvedType = (account?.type ?: accountType).trim()
+    val isDebtAccount =
+        resolvedType.equals("Debt", ignoreCase = true) ||
+                resolvedType.equals("Credit Card", ignoreCase = true) ||
+                resolvedType.equals("Loan", ignoreCase = true)
 
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -44,8 +52,8 @@ fun AccountDetailsScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(selectedMonth, accountName) {
-        viewModel.fetchTransactions(selectedMonth, accountName)
         viewModel.fetchAccounts()
+        viewModel.fetchTransactions(selectedMonth, accountName)
     }
 
     Scaffold(
@@ -71,10 +79,12 @@ fun AccountDetailsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = if (balance < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
+
             Spacer(Modifier.height(16.dp))
 
+            // ✅ Button row (debt accounts only show payment)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (accountType in listOf("Credit Card", "Loan", "Debt")) {
+                if (isDebtAccount) {
                     Button(onClick = { actionType = "payment"; showActionDialog = true }) {
                         Text("Make Payment")
                     }
@@ -128,41 +138,54 @@ fun AccountDetailsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(desc ?: "Transfer", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                Text("Category: $category", style = MaterialTheme.typography.bodySmall)
+
+                                // Date (small)
+                                Text(
+                                    text = tx.date,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Spacer(Modifier.height(2.dp))
+
+                                // Description (bigger)
+                                Text(
+                                    text = desc ?: "Transfer",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Spacer(Modifier.height(2.dp))
+
+                                // Category (same style as card)
+                                Text(
+                                    text = "Category: $category",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+
+                                // Card
+                                Text(
+                                    text = "Card: ${tx.card ?: "N/A"}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
-                            val amountColor = if (tx.amount < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                            Text("$${String.format("%.2f", tx.amount)}", style = MaterialTheme.typography.bodyLarge, color = amountColor)
+
+                            val amountColor =
+                                if (tx.amount < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            Text(
+                                "$${String.format("%.2f", tx.amount)}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = amountColor
+                            )
                         }
                         Divider()
-                    }
-
-                    // --- Mirror entry if no transfer transaction is present for this account ---
-                    val hasTransfer = transactions.any {
-                        it.description.equals("no description", true) || it.description.equals("Transfer", true)
-                    }
-                    if (!hasTransfer) {
-                        item {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Transfer", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                    Text("Category: Deposit", style = MaterialTheme.typography.bodySmall)
-                                }
-                                Text("$0.00", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                            }
-                            Divider()
-                        }
                     }
                 }
             }
         }
     }
 
+    // Transaction details bottom sheet
     if (selectedTransaction != null) {
         ModalBottomSheet(
             sheetState = sheetState,
@@ -178,12 +201,16 @@ fun AccountDetailsScreen(
         }
     }
 
+    // Delete account dialog
     if (showDeleteDialog) {
         ConfirmDeleteDialog(
             accountName = accountName,
             onConfirm = {
                 val accountToDelete = viewModel.accounts.value.find { it.name == accountName }
-                if (accountToDelete?.type == "Debt") {
+                if (accountToDelete?.type.equals("Debt", ignoreCase = true) ||
+                    accountToDelete?.type.equals("Credit Card", ignoreCase = true) ||
+                    accountToDelete?.type.equals("Loan", ignoreCase = true)
+                ) {
                     viewModel.deleteDebt(accountName)
                 } else {
                     viewModel.deleteBank(accountName)
@@ -196,10 +223,23 @@ fun AccountDetailsScreen(
         )
     }
 
+    // Action dialog (payment/transfer restrictions)
     if (showActionDialog) {
-        val destinationAccounts = viewModel.accounts.value
+        val bankOnlyAccounts = viewModel.accounts.value
             .filter { it.name != accountName }
+            .filter {
+                it.type.equals("Bank", ignoreCase = true) ||
+                        it.type.equals("Debit", ignoreCase = true) ||
+                        it.type.equals("Savings", ignoreCase = true)
+            }
             .map { it.name }
+
+        val destinationAccounts =
+            when (actionType) {
+                "payment" -> bankOnlyAccounts // payment source must be bank-only
+                "transfer" -> bankOnlyAccounts // transfers only between bank accounts
+                else -> emptyList()
+            }
 
         MoneyActionDialog(
             action = actionType,
@@ -207,13 +247,19 @@ fun AccountDetailsScreen(
             onDismiss = { showActionDialog = false },
             onConfirm = { amount, destination ->
                 when (actionType) {
+                    // payment: from (bank) -> to (debt)
                     "payment" -> viewModel.transferFunds(destination ?: "", accountName, amount)
+
+                    // transfer: from (bank) -> to (bank)
                     "transfer" -> viewModel.transferFunds(accountName, destination ?: "", amount)
+
+                    // deposit/withdraw affect the current bank account only
                     else -> viewModel.adjustAccountFunds(accountName, actionType, amount)
                 }
+
                 showActionDialog = false
                 viewModel.fetchAccounts()
-                navController.popBackStack() // <-- Go back to main accounts page
+                viewModel.fetchTransactions(selectedMonth, accountName)
             }
         )
     }
@@ -236,7 +282,8 @@ fun MoneyActionDialog(
         confirmButton = {
             Button(onClick = {
                 val amt = amount.toDoubleOrNull() ?: 0.0
-                onConfirm(amt, if (action == "transfer" || action == "payment") selectedAccount else null)
+                val needsAccount = (action == "transfer" || action == "payment")
+                onConfirm(amt, if (needsAccount) selectedAccount else null)
             }) { Text("Confirm") }
         },
         dismissButton = { Button(onClick = onDismiss) { Text("Cancel") } },
@@ -244,7 +291,10 @@ fun MoneyActionDialog(
         text = {
             Column {
                 if (action == "transfer" || action == "payment") {
-                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }
+                    ) {
                         OutlinedTextField(
                             value = selectedAccount,
                             onValueChange = {},
@@ -253,7 +303,10 @@ fun MoneyActionDialog(
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                             modifier = Modifier.menuAnchor().fillMaxWidth()
                         )
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
                             allAccounts.forEach { option ->
                                 DropdownMenuItem(
                                     text = { Text(option) },
@@ -264,11 +317,13 @@ fun MoneyActionDialog(
                     }
                     Spacer(Modifier.height(12.dp))
                 }
+
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { amount = it },
                     label = { Text("Amount") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -281,7 +336,11 @@ fun getCurrentMonth(): String {
 }
 
 @Composable
-fun TransactionDetailContent(transaction: Transaction, accountName: String, onClose: () -> Unit) {
+fun TransactionDetailContent(
+    transaction: Transaction,
+    accountName: String,
+    onClose: () -> Unit
+) {
     val isTransfer = transaction.description.isNullOrBlank() || transaction.description.equals("no description", true)
     val desc = if (isTransfer) "Transfer" else transaction.description
     val category = if (isTransfer) {
@@ -315,11 +374,18 @@ fun TransactionDetailContent(transaction: Transaction, accountName: String, onCl
 }
 
 @Composable
-fun ConfirmDeleteDialog(accountName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ConfirmDeleteDialog(
+    accountName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
                 Text("Delete")
             }
         },
