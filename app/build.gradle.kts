@@ -15,6 +15,11 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        externalNativeBuild {
+            cmake {
+                cppFlags += ""
+            }
+        }
     }
 
     buildFeatures {
@@ -23,6 +28,12 @@ android {
 
     kotlinOptions {
         jvmTarget = "1.8"
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 }
 
@@ -56,5 +67,7 @@ dependencies {
 
     // --- Coroutines ---
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }
 

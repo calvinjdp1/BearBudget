@@ -1,13 +1,46 @@
 package com.example.bearbudget.ui.screens
 
-import androidx.compose.foundation.layout.*
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.bearbudget.network.Transaction
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -18,6 +51,8 @@ fun AddTransactionScreen(
     viewModel: TransactionsViewModel = viewModel(),
     onTransactionAdded: () -> Unit
 ) {
+    val context = LocalContext.current
+
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("") }
@@ -26,15 +61,36 @@ fun AddTransactionScreen(
     var expandedCard by remember { mutableStateOf(false) }
     var showConfirmation by remember { mutableStateOf(false) }
 
+    var receiptImageUri by remember { mutableStateOf<String?>(null) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
     val categories by viewModel.categories.collectAsState()
     val cards by viewModel.cards.collectAsState()
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            receiptImageUri = pendingCameraUri?.toString()
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            receiptImageUri = uri.toString()
+        }
+    }
 
     if (showConfirmation) {
         Text(
             text = "Transaction Added Successfully!",
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
         )
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(3000)
@@ -49,31 +105,40 @@ fun AddTransactionScreen(
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },
-            label = { Text("Description") },
+            label = { Text("Description / Items") },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
             value = amount,
-            onValueChange = { input -> if (input.all { it.isDigit() || it == '.' }) amount = input },
+            onValueChange = { input ->
+                if (input.all { it.isDigit() || it == '.' }) amount = input
+            },
             label = { Text("Amount") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Category dropdown
-        ExposedDropdownMenuBox(expanded = expandedCategory, onExpandedChange = { expandedCategory = !expandedCategory }) {
+        ExposedDropdownMenuBox(
+            expanded = expandedCategory,
+            onExpandedChange = { expandedCategory = !expandedCategory }
+        ) {
             OutlinedTextField(
                 value = selectedCategory,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Category") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategory) },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
             )
-            DropdownMenu(expanded = expandedCategory, onDismissRequest = { expandedCategory = false }) {
+            DropdownMenu(
+                expanded = expandedCategory,
+                onDismissRequest = { expandedCategory = false }
+            ) {
                 categories.forEach { category ->
                     DropdownMenuItem(
                         text = { Text(category) },
@@ -87,17 +152,24 @@ fun AddTransactionScreen(
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Card dropdown (only accounts now, no Add Card option)
-        ExposedDropdownMenuBox(expanded = expandedCard, onExpandedChange = { expandedCard = !expandedCard }) {
+        ExposedDropdownMenuBox(
+            expanded = expandedCard,
+            onExpandedChange = { expandedCard = !expandedCard }
+        ) {
             OutlinedTextField(
                 value = selectedCard,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Account") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCard) },
-                modifier = Modifier.menuAnchor().fillMaxWidth()
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
             )
-            DropdownMenu(expanded = expandedCard, onDismissRequest = { expandedCard = false }) {
+            DropdownMenu(
+                expanded = expandedCard,
+                onDismissRequest = { expandedCard = false }
+            ) {
                 cards.forEach { card ->
                     DropdownMenuItem(
                         text = { Text(card) },
@@ -109,6 +181,63 @@ fun AddTransactionScreen(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Receipt", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = {
+                    val uri = ReceiptCameraUtils.createImageUri(context)
+                    pendingCameraUri = uri
+                    cameraLauncher.launch(uri)
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Camera")
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            OutlinedButton(
+                onClick = { galleryLauncher.launch("image/*") },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Image, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Gallery")
+            }
+        }
+
+        if (!receiptImageUri.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AsyncImage(
+                model = receiptImageUri,
+                contentDescription = "Receipt preview",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .clip(MaterialTheme.shapes.medium),
+                contentScale = ContentScale.Crop
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = { receiptImageUri = null },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Delete, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Remove Receipt")
+            }
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(
@@ -122,15 +251,17 @@ fun AddTransactionScreen(
                     category = selectedCategory,
                     notes = "",
                     transaction_type = "expense",
-                    related_account = null
+                    related_account = null,
+                    receiptImageUri = receiptImageUri
                 )
                 viewModel.addTransaction(transaction) {
                     amount = ""
                     description = ""
                     selectedCategory = ""
                     selectedCard = ""
+                    receiptImageUri = null
                     showConfirmation = true
-                    onTransactionAdded() // popBackStack() from navigation
+                    onTransactionAdded()
                 }
             },
             modifier = Modifier.fillMaxWidth()

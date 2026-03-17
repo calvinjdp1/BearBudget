@@ -1,10 +1,29 @@
 package com.example.bearbudget.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -29,7 +48,6 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
-    // ✅ Ensure newest-first + same-day newest-first using id as tie-breaker
     val sorted = remember(transactions) {
         transactions.sortedWith(
             compareByDescending<Transaction> { it.date }
@@ -39,7 +57,9 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddSheet = true }) { Text("+") }
+            FloatingActionButton(onClick = { showAddSheet = true }) {
+                Text("+")
+            }
         }
     ) { paddingValues ->
         Column(
@@ -48,7 +68,11 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            Text("Transactions", style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = "Transactions",
+                style = MaterialTheme.typography.titleLarge
+            )
+
             Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn {
@@ -64,7 +88,7 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
                         }
                     }
 
-                    item {
+                    item(key = tx.id ?: "${tx.date}-${tx.description}-${tx.amount}") {
                         TransactionRow(
                             transaction = tx,
                             onClick = {
@@ -79,7 +103,6 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
         }
     }
 
-    // Transaction details bottom sheet
     if (selectedTransaction != null) {
         ModalBottomSheet(
             sheetState = sheetState,
@@ -105,13 +128,12 @@ fun TransactionsScreen(viewModel: TransactionsViewModel = viewModel()) {
         }
     }
 
-    // Add transaction sheet
     if (showAddSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAddSheet = false }
         ) {
             AddTransactionScreen(viewModel = viewModel) {
-                viewModel.fetchTransactions() // refresh after adding
+                viewModel.fetchTransactions()
                 showAddSheet = false
             }
         }
@@ -127,7 +149,11 @@ private fun TransactionRow(
         transaction.description.isNullOrBlank() ||
                 transaction.description.equals("no description", true)
 
-    val desc = if (isTransfer) "Transfer" else (transaction.description ?: "No description")
+    val desc = if (isTransfer) {
+        "Transfer"
+    } else {
+        firstDescriptionLine(transaction.description)
+    }
 
     Row(
         modifier = Modifier
@@ -137,8 +163,6 @@ private fun TransactionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-
-            // Date (small)
             Text(
                 text = formatDisplayDate(transaction.date),
                 style = MaterialTheme.typography.bodySmall,
@@ -147,7 +171,6 @@ private fun TransactionRow(
 
             Spacer(Modifier.height(2.dp))
 
-            // Description (bigger)
             Text(
                 text = desc,
                 style = MaterialTheme.typography.bodyLarge,
@@ -156,13 +179,11 @@ private fun TransactionRow(
 
             Spacer(Modifier.height(2.dp))
 
-            // Category (small, same as card)
             Text(
                 text = "Category: ${transaction.category ?: "No Category"}",
                 style = MaterialTheme.typography.bodySmall
             )
 
-            // Card (small)
             Text(
                 text = "Card: ${transaction.card ?: "N/A"}",
                 style = MaterialTheme.typography.bodySmall
@@ -198,6 +219,13 @@ private fun DateGroupHeader(text: String) {
     }
 }
 
+private fun firstDescriptionLine(description: String?): String {
+    return description
+        ?.lines()
+        ?.firstOrNull { it.trim().isNotEmpty() }
+        ?.trim()
+        ?: "No description"
+}
 
 private fun dateHeaderLabel(dateStr: String): String {
     val txDate = parseIsoDateOrNull(dateStr) ?: return dateStr
@@ -212,7 +240,7 @@ private fun dateHeaderLabel(dateStr: String): String {
 
 private fun parseIsoDateOrNull(dateStr: String): LocalDate? {
     return try {
-        LocalDate.parse(dateStr) // expects YYYY-MM-DD
+        LocalDate.parse(dateStr)
     } catch (_: DateTimeParseException) {
         null
     }
