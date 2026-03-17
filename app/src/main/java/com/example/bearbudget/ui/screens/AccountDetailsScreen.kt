@@ -28,6 +28,7 @@ fun AccountDetailsScreen(
     startingBalance: Double = 0.0,
     navController: NavController,
     viewModel: AccountsViewModel = viewModel()
+
 ) {
     var selectedMonth by remember { mutableStateOf(getCurrentMonth()) }
     val transactions by viewModel.transactions.collectAsState()
